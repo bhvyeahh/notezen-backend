@@ -12,13 +12,21 @@ import { sendEmailViaBrevo } from "../helpers/emailBrevo.js";
 export const sendOtp = async (req, res) => {
   try {
     const { name, email } = req.body;
-    if (!email)
-      return res.status(400).json({ success: false, message: "Email required" });
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email required",
+      });
+    }
 
     // ✅ Check if user already exists before sending OTP
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(409).json({ success: false, message: "User already exists!" });
+      return res.status(409).json({
+        success: false,
+        message: "User already exists!",
+      });
     }
 
     // ✅ Generate OTP
@@ -31,21 +39,28 @@ export const sendOtp = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // ✅ Build email content
-    const html = `
-      <div style="font-family:Arial;padding:20px;">
-        <h2>Hey ${name || "there"} 👋</h2>
-        <p>Your NoteZen verification code is:</p>
+    // ✅ Build email HTML + text
+    const htmlContent = `
+      <div style="font-family:Arial, sans-serif;padding:20px;background:#f9fafb;border-radius:8px;">
+        <h2 style="color:#111827;">Hey ${name || "there"} 👋</h2>
+        <p style="color:#374151;">Your NoteZen verification code is:</p>
         <h1 style="color:#4f46e5;letter-spacing:3px;">${otp}</h1>
-        <p>This code expires in 5 minutes.</p>
+        <p style="color:#6b7280;">This code expires in 5 minutes.</p>
+        <hr style="margin:20px 0;border:none;border-top:1px solid #e5e7eb;"/>
+        <p style="font-size:12px;color:#9ca3af;">
+          Sent with ❤️ from <strong>NoteZen</strong>
+        </p>
       </div>
     `;
+
+    const textContent = `Hey ${name || "there"}, your NoteZen verification code is ${otp}. It expires in 5 minutes.`;
 
     // ✅ Send via Brevo REST API
     await sendEmailViaBrevo({
       to: email,
-      subject: "Your NoteZen OTP",
-      html,
+      subject: "Your NoteZen OTP Code",
+      htmlContent,
+      textContent,
     });
 
     res.status(200).json({
@@ -68,20 +83,39 @@ export const sendOtp = async (req, res) => {
 export const verifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
-    if (!email || !otp)
-      return res.status(400).json({ success: false, message: "Email and OTP required" });
+
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and OTP required",
+      });
+    }
 
     const record = await Otp.findOne({ email });
-    if (!record)
-      return res.status(400).json({ success: false, message: "OTP expired or not found" });
+    if (!record) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP expired or not found",
+      });
+    }
 
-    if (record.otp !== otp)
-      return res.status(400).json({ success: false, message: "Invalid OTP" });
+    if (record.otp !== otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid OTP",
+      });
+    }
 
-    res.status(200).json({ success: true, message: "OTP verified successfully" });
+    res.status(200).json({
+      success: true,
+      message: "OTP verified successfully",
+    });
   } catch (error) {
     console.error("❌ OTP verify error:", error);
-    res.status(500).json({ success: false, message: "OTP verification failed" });
+    res.status(500).json({
+      success: false,
+      message: "OTP verification failed",
+    });
   }
 };
 
@@ -94,17 +128,28 @@ export const registerAfterOtp = async (req, res, next) => {
 
   try {
     const { name, email, password } = req.body;
-    if (!name || !email || !password)
-      return res.status(400).json({ success: false, message: "All fields required" });
+
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields required",
+      });
+    }
 
     const existingUser = await User.findOne({ email }).session(session);
-    if (existingUser)
-      return res.status(409).json({ success: false, message: "User already exists!" });
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: "User already exists!",
+      });
+    }
 
     const salt = await bcrypt.genSalt(10);
     const hashed = await bcrypt.hash(password, salt);
 
-    const [newUser] = await User.create([{ name, email, password: hashed }], { session });
+    const [newUser] = await User.create([{ name, email, password: hashed }], {
+      session,
+    });
     await Otp.deleteOne({ email });
 
     const token = jwt.sign({ userId: newUser._id }, JWT_SECRET, {
@@ -135,19 +180,29 @@ export const registerAfterOtp = async (req, res, next) => {
 export const signIn = async (req, res, next) => {
   try {
     const { email, password } = req.body;
+
     const user = await User.findOne({ email });
-    if (!user)
-      return res.status(404).json({ success: false, message: "User not found" });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
 
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid)
-      return res.status(401).json({ success: false, message: "Invalid password" });
+    if (!valid) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid password",
+      });
+    }
 
     const token = jwt.sign({ userId: user._id }, JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN,
     });
 
     user.password = undefined;
+
     res.status(200).json({
       success: true,
       message: "User signed in successfully",
@@ -164,7 +219,10 @@ export const signIn = async (req, res, next) => {
 // ==========================
 export const signOut = async (req, res, next) => {
   try {
-    res.status(200).json({ success: true, message: "Logged out successfully" });
+    res.status(200).json({
+      success: true,
+      message: "Logged out successfully",
+    });
   } catch (error) {
     next(error);
   }
